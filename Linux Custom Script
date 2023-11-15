@@ -1,0 +1,150 @@
+#!/bin/bash
+
+# Set command name and version
+command_name="internsctl"
+command_version="v0.1.0"
+
+# Get filename and options
+filename="$3"
+options="$4"
+# Function to get file information
+get_file_info() {
+    # Get file information using stat command
+    file_info=$(ls -l "$filename")
+
+    # Extract file permissions from the output
+    file_permissions=$(echo "$file_info" | cut -d ' ' -f 1)
+
+    # Extract file owner from the output
+    file_owner=$(echo "$file_info" | cut -d ' ' -f 3)
+
+    # Extract group owner from the output
+    group_owner=$(echo "$file_info" | cut -d ' ' -f 4)
+
+    # Extract file size from the output
+    file_size=$(echo "$file_info" | cut -d ' ' -f 5)
+
+    # Display file information
+    if [[ "$options" == "--size" || "$options" == "-s" ]]; then
+        echo "Size(B): $file_size"
+    elif [[ "$options" == "--permissions" || "$options" == "-p" ]]; then
+        echo "Access: $file_permissions"
+    elif [[ "$options" == "--owner" || "$options" == "-o" ]]; then
+        echo "Owner: $file_owner"
+    elif [[ "$options" == "--last-modified" || "$options" == "-m" ]]; then
+        echo $(stat "$filename" | grep -e Modify)
+    else
+        echo "File: $filename"
+        echo "Access: $file_permissions"
+        echo "Size(B): $file_size"
+        echo "Owner: $file_owner"
+        echo $(stat "$filename" | grep -e Modify)
+    fi
+}
+
+
+# Function to get memory information
+get_memory_info() {
+    # Get memory information using free command
+    echo $(free -m | awk '{printf("%-20s: %10s%10s%10s\n", $1, $2, $3, $4)} END {printf("\n%-20s | %-10s | %-10s | %-10s\n", "Total", "Used", "Free", "Buff/Cache")}')
+
+}
+# Function to create a new user
+create_user() {
+    # Get username
+    username= "$3"
+
+    # Check if username exists
+    if id -u "$username" >/dev/null 2>&1; then
+        echo "Error: User '$username' already exists."
+        exit 1
+    fi
+
+    # Create the user account
+    sudo useradd -m "$username"
+    echo "User '$username' created successfully."
+}
+
+# Function to list all regular users
+list_users() {
+    # Get a list of all users
+    users=$(cut -d ':' -f 1 /etc/passwd)
+
+    # Filter regular users (UID >= 1000)
+    regular_users=()
+    for user in $users; do
+        user_id=$(id -u "$user")
+        if [[ $user_id -ge 1000 ]]; then
+            regular_users+=("$user")
+        fi
+    done
+
+    # Display list of regular users
+    echo "Regular Users:"
+    echo "${regular_users[@]}"
+}
+
+# Function to list users with sudo permissions
+list_sudo_users() {
+    # Get a list of users with sudo privileges
+    sudo_users=$(grep sudo /etc/group | tail -n +2 | cut -d ':' -f 4)
+
+    # Display list of sudo users
+    echo "Users with Sudo Privileges:"
+    echo "${sudo_users[@]}"
+}
+
+
+
+# Handle command options
+case "$1" in
+  --help)
+    echo "internsctl -- Manage interns"
+    echo "Available options:"
+    echo "  --help     Display this help message"
+    echo "  --version  Show command version"
+    echo ""
+    exit 0
+    ;;
+  --version)
+    echo "$command_name $command_version"
+    exit 0
+    ;;
+  cpu)
+    if [[ "$2" == "getinfo" ]]; then
+        # Get CPU information
+        cpu_info=$(lscpu)
+
+        # Display CPU information
+        echo "CPU Information:"
+        echo "$cpu_info"
+    fi
+    exit 0
+    ;;
+  memory)
+    # Handle command options
+    if [[ "$2" == "getinfo" ]]; then
+        get_memory_info
+    fi
+    exit 0
+    ;;
+  user)
+    #Handle command options
+    if [[ "$2" == "create" ]]; then
+        create_user
+    elif [[  "$2" == "list" ]]; then
+        list_users
+    elif [[ "$2" == "list" && "$3" == "--sudo-only" ]]; then
+        list_sudo_users
+    fi
+    exit 0
+    ;;
+  file)
+    if [[  "$2" == "getinfo" ]]; then
+        get_file_info
+    fi
+    exit 0
+    ;;
+esac
+
+
